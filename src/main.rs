@@ -169,13 +169,14 @@ async fn mine_account(cookie: String, threads: usize, account_idx: usize) {
                 let body = r.text().await.unwrap_or_default();
                 if status.is_success() {
                     total_mined += 1;
-                    let balance = async {
-                        let r = client.get(format!("{}/me", API_BASE))
-                            .header("cookie", &cookie).send().await.ok()?;
-                        let m = r.json::<Me>().await.ok()?;
-                        m.balance
-                    }.await;
-                    let bal_str = balance.map(|b| format!(" | balance: {}", b)).unwrap_or_default();
+                    let bal_str = if total_mined % 5 == 0 {
+                        let balance = async {
+                            let r = client.get(format!("{}/me", API_BASE))
+                                .header("cookie", &cookie).send().await.ok()?;
+                            r.json::<Me>().await.ok()?.balance
+                        }.await;
+                        balance.map(|b| format!(" | balance: {}", b)).unwrap_or_default()
+                    } else { String::new() };
                     println!("[+] [{}] Minted! Session: {}{}", label, total_mined, bal_str);
                 } else {
                     eprintln!("[!] [{}] Mint failed ({}): {}", label, status, body);
