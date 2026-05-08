@@ -1,0 +1,4 @@
+# One cookie per line (format: rpow_session=xxx)
+# Lines starting with # are ignored
+rpow_session=COOKIE_AKUN_1
+rpow_session=COOKIE_AKUN_2
