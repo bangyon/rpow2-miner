@@ -23,6 +23,12 @@ struct MintRequest {
     solution_nonce: String,
 }
 
+#[derive(Deserialize)]
+struct Me {
+    email: Option<String>,
+    balance: Option<u64>,
+}
+
 fn hex_to_bytes(hex: &str) -> Vec<u8> {
     (0..hex.len())
         .step_by(2)
@@ -80,10 +86,14 @@ async fn mine_account(cookie: String, threads: usize, account_idx: usize) {
     let client = Client::builder().build().unwrap();
     let mut total_mined = 0u64;
 
-    let label = if cookie.contains('@') {
-        cookie.split('|').next().unwrap_or("???").to_string()
-    } else {
-        format!("account-{}", account_idx + 1)
+    // Fetch email from /me
+    let label = match client.get(format!("{}/me", API_BASE))
+        .header("cookie", &cookie).send().await
+    {
+        Ok(r) => r.json::<Me>().await.ok()
+            .and_then(|m| m.email)
+            .unwrap_or_else(|| format!("account-{}", account_idx + 1)),
+        Err(_) => format!("account-{}", account_idx + 1),
     };
 
     println!("[*] [{}] Starting miner with {} threads", label, threads);
@@ -159,7 +169,14 @@ async fn mine_account(cookie: String, threads: usize, account_idx: usize) {
                 let body = r.text().await.unwrap_or_default();
                 if status.is_success() {
                     total_mined += 1;
-                    println!("[+] [{}] Minted! Total: {} | {}", label, total_mined, body);
+                    let balance = async {
+                        let r = client.get(format!("{}/me", API_BASE))
+                            .header("cookie", &cookie).send().await.ok()?;
+                        let m = r.json::<Me>().await.ok()?;
+                        m.balance
+                    }.await;
+                    let bal_str = balance.map(|b| format!(" | balance: {}", b)).unwrap_or_default();
+                    println!("[+] [{}] Minted! Session: {}{}", label, total_mined, bal_str);
                 } else {
                     eprintln!("[!] [{}] Mint failed ({}): {}", label, status, body);
                 }
